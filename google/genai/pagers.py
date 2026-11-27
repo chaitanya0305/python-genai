@@ -170,7 +170,8 @@ class Pager(_BasePager[T]):
 
   def __next__(self) -> T:
     """Returns the next item."""
-    if self._idx >= len(self):
+    # A page can be empty even when more pages follow, so keep fetching.
+    while self._idx >= len(self):
       try:
         self.next_page()
       except IndexError:
@@ -227,7 +228,8 @@ class AsyncPager(_BasePager[T]):
 
   async def __anext__(self) -> T:
     """Returns the next item asynchronously."""
-    if self._idx >= len(self):
+    # A page can be empty even when more pages follow, so keep fetching.
+    while self._idx >= len(self):
       try:
         await self.next_page()
       except IndexError:
