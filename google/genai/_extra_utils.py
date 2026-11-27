@@ -756,28 +756,26 @@ def prepare_resumable_upload(
       )
   # Leave api_version unset unless the user set it: the API client puts the
   # resolved version in the `upload/{api_version}/...` path.
+  upload_headers = {
+      'Content-Type': 'application/json',
+      'X-Goog-Upload-Protocol': 'resumable',
+      'X-Goog-Upload-Command': 'start',
+      'X-Goog-Upload-Header-Content-Length': f'{size_bytes}',
+      'X-Goog-Upload-Header-Content-Type': f'{mime_type}',
+  }
   http_options: types.HttpOptions
   if user_http_options:
     if isinstance(user_http_options, dict):
       user_http_options = types.HttpOptions(**user_http_options)
-    http_options = user_http_options
+    # Copy so the caller's config is not changed, and keep the caller's
+    # headers alongside the upload headers.
+    http_options = user_http_options.model_copy()
     http_options.headers = {
-        'Content-Type': 'application/json',
-        'X-Goog-Upload-Protocol': 'resumable',
-        'X-Goog-Upload-Command': 'start',
-        'X-Goog-Upload-Header-Content-Length': f'{size_bytes}',
-        'X-Goog-Upload-Header-Content-Type': f'{mime_type}',
+        **(user_http_options.headers or {}),
+        **upload_headers,
     }
   else:
-    http_options = types.HttpOptions(
-        headers={
-            'Content-Type': 'application/json',
-            'X-Goog-Upload-Protocol': 'resumable',
-            'X-Goog-Upload-Command': 'start',
-            'X-Goog-Upload-Header-Content-Length': f'{size_bytes}',
-            'X-Goog-Upload-Header-Content-Type': f'{mime_type}',
-        },
-    )
+    http_options = types.HttpOptions(headers=upload_headers)
   if isinstance(file, (str, os.PathLike)):
     if http_options.headers is None:
         http_options.headers = {}
