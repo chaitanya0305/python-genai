@@ -25,7 +25,7 @@ import mimetypes
 import os
 import sys
 import typing
-from typing import Any, Callable, Dict, Optional, Type, TypeVar, Union, get_args, get_origin
+from typing import Any, Callable, Dict, Literal, Optional, Type, TypeVar, Union, get_args, get_origin
 import uuid
 
 import pydantic
@@ -301,6 +301,11 @@ def convert_if_exist_pydantic_model(
   # example 2: int | float equivalent to UnionType[int, float]
   if get_origin(annotation) in (Union, UnionType):
     for arg in get_args(annotation):
+      # isinstance() raises TypeError for Literal, so match its values here.
+      if get_origin(arg) is Literal:
+        if value in get_args(arg):
+          return value
+        continue
       if isinstance(value, str) and arg in _STRING_ENCODED_TYPES:
         try:
           return _convert_string_encoded_value(
@@ -333,6 +338,14 @@ def convert_if_exist_pydantic_model(
     return _convert_string_encoded_value(
         value, annotation, param_name, func_name
     )
+  if get_origin(annotation) is Literal:
+    if value in get_args(annotation):
+      return value
+    raise errors.UnknownFunctionCallArgumentError(
+        f'Failed to parse parameter {param_name} for function {func_name} from'
+        f' function call part because function call argument value {value} is'
+        f' not one of the allowed values {get_args(annotation)}.'
+    )
   # the only exception for value and annotation type to be different is int and
   # float. see convert_number_values_for_function_call_args function for context
   if isinstance(value, int) and annotation is float:
@@ -360,7 +373,8 @@ def convert_argument_from_function(
   for param_name, param in signature.parameters.items():
     if param_name in args:
       annotation = param.annotation
-      if isinstance(annotation, str) and param_name in type_hints:
+      # Use the resolved hint, which also unwraps Annotated[T, ...] to T.
+      if param_name in type_hints:
         annotation = type_hints[param_name]
       converted_args[param_name] = convert_if_exist_pydantic_model(
           args[param_name],

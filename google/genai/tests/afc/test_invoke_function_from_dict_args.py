@@ -16,7 +16,7 @@
 
 """Test invoke_function_from_dict_args."""
 
-from typing import Union
+from typing import Annotated, Literal, Optional, Union
 import pydantic
 import pytest
 import sys
@@ -239,3 +239,43 @@ def test_function_invocation_error():
 
   with pytest.raises(errors.FunctionInvocationError):
     invoke_function_from_dict_args({'x': 1}, func_under_test)
+
+
+def test_literal_annotation():
+  def func_under_test(unit: Literal['celsius', 'fahrenheit']):
+    return unit
+
+  assert (
+      invoke_function_from_dict_args({'unit': 'celsius'}, func_under_test)
+      == 'celsius'
+  )
+  with pytest.raises(errors.UnknownFunctionCallArgumentError):
+    invoke_function_from_dict_args({'unit': 'kelvin'}, func_under_test)
+
+
+def test_optional_literal_annotation():
+  def func_under_test(unit: Optional[Literal['celsius', 'fahrenheit']] = None):
+    return unit
+
+  assert (
+      invoke_function_from_dict_args({'unit': 'fahrenheit'}, func_under_test)
+      == 'fahrenheit'
+  )
+  assert invoke_function_from_dict_args({'unit': None}, func_under_test) is None
+  with pytest.raises(errors.UnknownFunctionCallArgumentError):
+    invoke_function_from_dict_args({'unit': 'kelvin'}, func_under_test)
+
+
+def test_annotated_annotation():
+  def func_under_test(
+      city: Annotated[str, pydantic.Field(description='City name')],
+      days: Annotated[int, 'number of days'],
+  ):
+    return f'{city}:{days}'
+
+  assert (
+      invoke_function_from_dict_args(
+          {'city': 'Paris', 'days': 3}, func_under_test
+      )
+      == 'Paris:3'
+  )
