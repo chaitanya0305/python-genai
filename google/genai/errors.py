@@ -94,15 +94,22 @@ class APIError(Exception):
 
   def __reduce__(
       self,
-  ) -> tuple[Callable[..., 'APIError'], tuple[dict[str, Any]]]:
+  ) -> tuple[
+      Callable[..., 'APIError'], tuple[dict[str, Any], type['APIError']]
+  ]:
     """Returns a tuple that can be used to reconstruct the error for pickling."""
     state = self.__dict__.copy()
-    return (self.__class__._rebuild, (state,))
+    return (APIError._rebuild, (state, self.__class__))
 
   @staticmethod
-  def _rebuild(state: dict[str, Any]) -> 'APIError':
+  def _rebuild(
+      state: dict[str, Any], cls: Optional[type['APIError']] = None
+  ) -> 'APIError':
     """Rebuilds the error from the state."""
-    obj = APIError.__new__(APIError)
+    # `cls` keeps subclasses such as ClientError. It is optional so errors
+    # pickled by older versions still load.
+    error_cls = cls or APIError
+    obj = error_cls.__new__(error_cls)
     obj.__dict__.update(state)
     Exception.__init__(obj, f'{obj.code} {obj.status}. {obj.details}')
     return obj

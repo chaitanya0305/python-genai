@@ -373,6 +373,27 @@ def test_api_error_is_picklable():
   assert isinstance(pickled_error, errors.APIError)
 
 
+@pytest.mark.parametrize(
+    'error_cls, code',
+    [
+        (errors.ClientError, 404),
+        (errors.ServerError, 503),
+    ],
+)
+def test_api_error_subclass_keeps_type_when_pickled(error_cls, code):
+  error = error_cls(
+      code,
+      {'error': {'code': code, 'message': 'error message', 'status': 'X'}},
+  )
+
+  pickled_error = pickle.loads(pickle.dumps(error))
+
+  assert type(pickled_error) is error_cls
+  assert pickled_error.code == code
+  assert pickled_error.message == 'error message'
+  assert str(pickled_error) == str(error)
+
+
 @pytest.mark.asyncio
 async def test_raise_for_async_response_client_error():
   class FakeResponse(httpx.Response):
