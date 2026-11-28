@@ -771,33 +771,36 @@ def encode_unserializable_types(data: dict[str, object]) -> dict[str, object]:
   of converters). So they may be bytes in the dict and they are out of
   `ser_json_bytes` control in model_dump(mode='json') called in
   `convert_to_dict`, as well as datetime deserialization in Pydantic json mode.
+  User values, such as a function response, can also hold dates, UUIDs and
+  enums, at any depth of nested dicts and lists.
 
   Returns:
-    A dictionary with json.dumps() incompatible type (e.g. bytes datetime)
-    to compatible type (e.g. base64 encoded string, isoformat date string).
+    A dictionary with json.dumps() incompatible type (e.g. bytes, datetime,
+    date, UUID, Enum) to compatible type (e.g. base64 encoded string, isoformat
+    date string, enum value).
   """
-  processed_data: dict[str, object] = {}
   if not isinstance(data, dict):
     return data
-  for key, value in data.items():
-    if isinstance(value, bytes):
-      processed_data[key] = base64.urlsafe_b64encode(value).decode('ascii')
-    elif isinstance(value, datetime.datetime):
-      processed_data[key] = value.isoformat()
-    elif isinstance(value, dict):
-      processed_data[key] = encode_unserializable_types(value)
-    elif isinstance(value, list):
-      if all(isinstance(v, bytes) for v in value):
-        processed_data[key] = [
-            base64.urlsafe_b64encode(v).decode('ascii') for v in value
-        ]
-      if all(isinstance(v, datetime.datetime) for v in value):
-        processed_data[key] = [v.isoformat() for v in value]
-      else:
-        processed_data[key] = [encode_unserializable_types(v) for v in value]
-    else:
-      processed_data[key] = value
-  return processed_data
+  return {
+      key: _encode_unserializable_value(value) for key, value in data.items()
+  }
+
+
+def _encode_unserializable_value(value: object) -> object:
+  """Converts one value, and the values nested in it, for json.dumps()."""
+  if isinstance(value, bytes):
+    return base64.urlsafe_b64encode(value).decode('ascii')
+  if isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
+    return value.isoformat()
+  if isinstance(value, uuid.UUID):
+    return str(value)
+  if isinstance(value, enum.Enum):
+    return _encode_unserializable_value(value.value)
+  if isinstance(value, dict):
+    return encode_unserializable_types(value)
+  if isinstance(value, (list, tuple)):
+    return [_encode_unserializable_value(v) for v in value]
+  return value
 
 
 def experimental_warning(
