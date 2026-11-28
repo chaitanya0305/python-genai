@@ -3136,3 +3136,35 @@ def test_from_response_malformed_json_parsed_is_none():
   )
   assert response.text == '{not json'
   assert response.parsed is None
+
+
+class _ParsedUnionModel(pydantic.BaseModel):
+  name: str
+  minutes: int
+
+
+@pytest.mark.parametrize(
+    'response_schema',
+    [
+        Optional[_ParsedUnionModel],
+        typing.Union[_ParsedUnionModel, None],
+        typing.Union[None, _ParsedUnionModel],
+        typing.Union[_ParsedUnionModel, list[_ParsedUnionModel]],
+    ],
+    ids=['optional', 'union_none', 'none_first', 'union_list'],
+)
+def test_from_response_union_with_model_parses_to_model(response_schema):
+  """A union with a model and a non-model member still parses to the model."""
+  response = types.GenerateContentResponse._from_response(
+      response=_text_response('{"name": "soup", "minutes": 20}'),
+      kwargs={'config': {'response_schema': response_schema}},
+  )
+  assert response.parsed == _ParsedUnionModel(name='soup', minutes=20)
+
+
+def test_from_response_optional_model_null():
+  response = types.GenerateContentResponse._from_response(
+      response=_text_response('null'),
+      kwargs={'config': {'response_schema': Optional[_ParsedUnionModel]}},
+  )
+  assert response.parsed is None

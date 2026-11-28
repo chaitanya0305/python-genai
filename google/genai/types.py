@@ -9419,28 +9419,34 @@ class GenerateContentResponse(_common.BaseModel):
     elif typing.get_origin(response_schema) in _UNION_TYPES:
       # Union schema.
       union_types = typing.get_args(response_schema)
-      for union_type in union_types:
-        if issubclass(union_type, pydantic.BaseModel):
-          try:
-            result_text = result._get_text()
-            if result_text is not None:
+      # Validate against the whole union once. Checking each member in turn
+      # let a later non-model member (e.g. None in Optional[Model]) overwrite
+      # the validated model with the raw dict.
+      if any(
+          inspect.isclass(union_type)
+          and issubclass(union_type, pydantic.BaseModel)
+          for union_type in union_types
+      ):
+        try:
+          result_text = result._get_text()
+          if result_text is not None:
 
-              class Placeholder(pydantic.BaseModel):  # type: ignore[no-redef]
-                placeholder: response_schema  # type: ignore[valid-type]
+            class Placeholder(pydantic.BaseModel):  # type: ignore[no-redef]
+              placeholder: response_schema  # type: ignore[valid-type]
 
-              parsed = {'placeholder': json.loads(result_text)}
-              placeholder = Placeholder.model_validate(parsed)
-              result.parsed = placeholder.placeholder
-          except ValueError:
-            pass
-        else:
-          try:
-            result_text = result._get_text()
-            if result_text is not None:
-              result.parsed = json.loads(result_text)
-          # may not be a valid json per stream response
-          except ValueError:
-            pass
+            parsed = {'placeholder': json.loads(result_text)}
+            placeholder = Placeholder.model_validate(parsed)
+            result.parsed = placeholder.placeholder
+        except ValueError:
+          pass
+      else:
+        try:
+          result_text = result._get_text()
+          if result_text is not None:
+            result.parsed = json.loads(result_text)
+        # may not be a valid json per stream response
+        except ValueError:
+          pass
 
     return result
 
